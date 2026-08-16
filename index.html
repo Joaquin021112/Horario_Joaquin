@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Horario interactivo de la agencia</title>
+<style>
+:root{
+  --blue:#2563eb;
+  --blue2:#60a5fa;
+  --blue3:#93c5fd;
+  --bg:#071426;
+  --panel:#0f2d5a;
+  --text:#f6f9ff;
+  --muted:#afc3df;
+  --green:#37d391;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  color:var(--text);
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(37,99,235,.22), transparent 25%),
+    linear-gradient(145deg,#061322,#0b2d63);
+}
+.wrap{max-width:1120px;margin:auto;padding:18px}
+.card{
+  background:linear-gradient(180deg,rgba(18,51,100,.97),rgba(8,29,61,.97));
+  border:1px solid rgba(96,165,250,.23);
+  border-radius:20px;
+  padding:16px;
+  box-shadow:0 14px 34px rgba(0,0,0,.24);
+}
+.rule{
+  background:linear-gradient(135deg,rgba(37,99,235,.18),rgba(96,165,250,.07));
+  border:1px solid rgba(96,165,250,.35);
+  border-radius:17px;
+  padding:14px 16px;
+  margin-bottom:16px
+}
+.schedule{margin-bottom:16px}
+.schedule h2{margin:0 0 12px}
+.schedule-grid{
+  display:grid;
+  grid-template-columns:160px 1fr;
+  gap:7px 14px;
+  font-size:14px
+}
+.schedule-grid div{
+  padding:8px 0;
+  border-bottom:1px solid rgba(147,197,253,.08)
+}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.tab{
+  padding:10px 14px;
+  border-radius:12px;
+  border:1px solid rgba(96,165,250,.35);
+  background:rgba(12,38,78,.94);
+  color:#dcecff;
+  cursor:pointer
+}
+.tab.active{
+  background:linear-gradient(135deg,var(--blue),var(--blue2));
+  color:white;
+  border-color:transparent;
+  box-shadow:0 8px 20px rgba(37,99,235,.24)
+}
+.progress-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:10px 0 12px
+}
+.progress{
+  height:12px;
+  flex:1;
+  background:rgba(255,255,255,.08);
+  border-radius:999px;
+  overflow:hidden
+}
+.progress-fill{
+  height:100%;
+  width:0;
+  background:linear-gradient(90deg,var(--blue),var(--blue2),var(--blue3));
+  transition:width .35s ease
+}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.actions button{
+  padding:11px 15px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:700
+}
+.mark{
+  border:0;
+  color:white;
+  background:linear-gradient(135deg,var(--blue),var(--blue2))
+}
+.clear{
+  color:white;
+  background:rgba(11,31,68,.6);
+  border:1px solid rgba(96,165,250,.4)
+}
+.week{display:none}
+.week.active{display:block}
+.week h2{margin:0 0 4px}
+.week p{margin:0 0 14px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.day{position:relative}
+.day h3{margin:0 0 10px;font-size:16px}
+.day.done{
+  border-color:rgba(55,211,145,.5);
+  box-shadow:0 0 24px rgba(55,211,145,.1)
+}
+.trophy{
+  display:none;
+  position:absolute;
+  right:14px;
+  top:12px;
+  font-size:23px
+}
+.day.done .trophy{display:block}
+.task{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:9px 0;
+  border-bottom:1px solid rgba(147,197,253,.08);
+  cursor:pointer
+}
+.task:last-child{border-bottom:0}
+.task input{
+  width:21px;
+  height:21px;
+  min-width:21px;
+  accent-color:var(--blue);
+  margin-top:1px;
+  cursor:pointer
+}
+.task input:checked + span{
+  color:#849dbd;
+  text-decoration:line-through;
+  text-decoration-thickness:2px;
+  text-decoration-color:#72aef8
+}
+.overlay{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+.big{
+  position:absolute;
+  left:50%;
+  top:44%;
+  transform:translate(-50%,-50%);
+  font-size:84px;
+  animation:bigpop 1.3s ease forwards
+}
+.conf{
+  position:absolute;
+  top:-20px;
+  width:9px;
+  height:14px;
+  border-radius:2px;
+  animation:fall 1.6s linear forwards
+}
+.toast{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  padding:12px 16px;
+  border-radius:14px;
+  background:#103d7c;
+  color:#fff;
+  border:1px solid rgba(96,165,250,.4);
+  opacity:0;
+  transform:translateY(14px);
+  transition:.25s ease;
+  z-index:60
+}
+.toast.show{opacity:1;transform:none}
+@keyframes bigpop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}
+  55%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}
+  100%{opacity:0;transform:translate(-50%,-70%) scale(1)}
+}
+@keyframes fall{
+  to{transform:translateY(110vh) rotate(620deg);opacity:0}
+}
+@media(max-width:760px){
+  .grid{grid-template-columns:1fr}
+  .schedule-grid{grid-template-columns:125px 1fr}
+}
+</style>
+
+<style>
+.save-tools{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  margin:0 0 14px 0;
+}
+.save-status{
+  padding:9px 12px; border-radius:12px;
+  background:rgba(11,31,68,.55);
+  border:1px solid rgba(96,165,250,.28);
+  color:#cfe1fb; font-size:13px;
+}
+.reset-week{
+  padding:10px 14px; border-radius:12px; cursor:pointer;
+  color:white; background:rgba(11,31,68,.65);
+  border:1px solid rgba(96,165,250,.4); font-weight:700;
+}
+.reset-week:hover{transform:translateY(-1px)}
+</style>
+
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#071426">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Agencia J">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+</head>
+<body>
+<div class="wrap">
+<div class="card schedule">
+    <h2>Horario diario</h2>
+    <div class="schedule-grid">
+      <div>6:00 AM</div><div>Levantarse</div>
+      <div>6:40 AM</div><div>Salir de casa</div>
+      <div>7:15 AM - 2:00 PM</div><div>Colegio</div>
+      <div>2:15 PM - 3:15 PM</div><div>Almuerzo</div>
+      <div>3:15 PM - 3:40 PM</div><div>Descanso</div>
+      <div>3:30 PM - 4:30 PM</div><div>Deberes</div>
+      <div><strong>4:30 PM - 7:15 PM</strong></div><div><strong>Agencia</strong></div>
+      <div>7:15 PM - 8:00 PM</div><div>Cena y familia</div><div>8:00 PM</div><div>Reunión ATP</div>
+      <div>8:30 PM</div><div>Dormir</div>
+    </div>
+  </div>
+
+
+  <div class="save-tools">
+    <div id="saveStatus" class="save-status">Guardado automático activo</div>
+    <button type="button" id="resetMonthBtn" class="reset-week">↺ Reiniciar mes</button>
+  </div>
+
+  <div class="tabs">
+    <button type="button" class="tab active" data-week="1" onclick="showWeek(1)">Semana 1</button>
+    <button type="button" class="tab" data-week="2" onclick="showWeek(2)">Semana 2</button>
+    <button type="button" class="tab" data-week="3" onclick="showWeek(3)">Semana 3</button>
+    <button type="button" class="tab" data-week="4" onclick="showWeek(4)">Semana 4</button>
+  </div>
+
+  <div class="progress-row">
+    <div class="progress"><div id="bar" class="progress-fill"></div></div>
+    <div id="progressText">0%</div>
+  </div>
+
+  <div class="actions">
+    <button type="button" id="markAll" class="mark" onclick="markCurrentWeek()">✓ Tachar toda la semana</button>
+    <button type="button" id="clearAll" class="clear" onclick="clearCurrentWeek()">↺ Desmarcar toda la semana</button>
+  </div>
+
+  <section class="week active" data-week="1"><h2>Semana 1 · Estrategia, ideas y guiones</h2><p>Meta: dejar listos los 48 guiones.</p><div class="grid"><div class="card day"><span class="trophy">🏆</span><h3>Lunes · GL Phone</h3><label class="task"><input type="checkbox"><span>Ver qué videos funcionaron GL Phone</span></label><label class="task"><input type="checkbox"><span>Buscar ideas de contenido GL Phone</span></label><label class="task"><input type="checkbox"><span>Añadir ideas a la tabla de contenido</span></label><label class="task"><input type="checkbox"><span>Crear 16 guiones GL Phone</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Martes · Dr. Chávez</h3><label class="task"><input type="checkbox"><span>Ver qué videos funcionaron Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Buscar ideas de contenido Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Añadir ideas a la tabla de contenido</span></label><label class="task"><input type="checkbox"><span>Crear 16 guiones Dr. Chávez</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Miércoles · Cesoc&Med</h3><label class="task"><input type="checkbox"><span>Ver qué videos funcionaron Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Buscar ideas de contenido Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Añadir ideas a la tabla de contenido</span></label><label class="task"><input type="checkbox"><span>Crear 16 guiones Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Jueves · Cierre</h3><label class="task"><input type="checkbox"><span>Terminar pendientes de GL Phone</span></label><label class="task"><input type="checkbox"><span>Terminar pendientes de Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Terminar pendientes de Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Revisar los 48 guiones</span></label><label class="task"><input type="checkbox"><span>Enviar los 48 guiones</span></label><label class="task"><input type="checkbox"><span>Poner fechas de grabación</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Viernes</h3><label class="task"><input type="checkbox"><span>Confirmar grabaciones</span></label><label class="task"><input type="checkbox"><span>Descanso</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Sábado · Ligero</h3><label class="task"><input type="checkbox"><span>Ordenar guiones y carpetas por cliente</span></label><label class="task"><input type="checkbox"><span>Dejar lista la Semana 2</span></label></div></div></section><section class="week" data-week="2"><h2>Semana 2 · Producción y grabación</h2><p>Meta: grabar y dejar el material ordenado.</p><div class="grid"><div class="card day"><span class="trophy">🏆</span><h3>Antes de grabar</h3><label class="task"><input type="checkbox"><span>Confirmar horarios de todos los clientes</span></label><label class="task"><input type="checkbox"><span>Cargar baterías</span></label><label class="task"><input type="checkbox"><span>Revisar equipos</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Durante la grabación</h3><label class="task"><input type="checkbox"><span>Grabar</span></label><label class="task"><input type="checkbox"><span>Guardar material</span></label><label class="task"><input type="checkbox"><span>Ordenar archivos</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Después de grabar</h3><label class="task"><input type="checkbox"><span>Preparar la Semana 3 · Edición</span></label></div></div></section><section class="week" data-week="3"><h2>Semana 3 · Edición</h2><p>Meta: dejar los 48 videos listos.</p><div class="grid"><div class="card day"><span class="trophy">🏆</span><h3>Lunes · GL Phone</h3><label class="task"><input type="checkbox"><span>Editar videos 1 al 8 GL Phone</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Martes · GL Phone + Dr. Chávez</h3><label class="task"><input type="checkbox"><span>Editar videos 8 al 16 GL Phone</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label><label class="task"><input type="checkbox"><span>Editar videos 1 al 8 Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Miércoles · Dr. Chávez + Cesoc&Med</h3><label class="task"><input type="checkbox"><span>Editar videos 8 al 16 Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label><label class="task"><input type="checkbox"><span>Editar videos 1 al 8 Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Jueves · Cesoc&Med</h3><label class="task"><input type="checkbox"><span>Editar videos 8 al 16 Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Exportar y enviar</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Viernes · Cierre</h3><label class="task"><input type="checkbox"><span>Revisar los 48 videos</span></label><label class="task"><input type="checkbox"><span>Añadir 48 videos al calendario en Notion</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Sábado · Ligero</h3><label class="task"><input type="checkbox"><span>Preparar Semana 4</span></label><label class="task"><input type="checkbox"><span>Descanso</span></label></div></div></section><section class="week" data-week="4"><h2>Semana 4 · Control y clientes</h2><p>Meta: revisar resultados y preparar el siguiente mes.</p><div class="grid"><div class="card day"><span class="trophy">🏆</span><h3>Lunes · GL Phone</h3><label class="task"><input type="checkbox"><span>Revisar resultados GL Phone</span></label><label class="task"><input type="checkbox"><span>Responder mensajes GL Phone</span></label><label class="task"><input type="checkbox"><span>Revisar publicaciones GL Phone</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Martes · Dr. Chávez</h3><label class="task"><input type="checkbox"><span>Revisar resultados Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Responder mensajes Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Revisar publicaciones Dr. Chávez</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Miércoles · Cesoc&Med</h3><label class="task"><input type="checkbox"><span>Revisar resultados Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Responder mensajes Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Revisar publicaciones Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Jueves · Descanso</h3><label class="task"><input type="checkbox"><span>Descansar</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Viernes · Comunicación</h3><label class="task"><input type="checkbox"><span>Hablar con GL Phone</span></label><label class="task"><input type="checkbox"><span>Hablar con Dr. Chávez</span></label><label class="task"><input type="checkbox"><span>Hablar con Cesoc&Med</span></label><label class="task"><input type="checkbox"><span>Preguntar novedades</span></label><label class="task"><input type="checkbox"><span>Preguntar qué temas quieren para los próximos videos</span></label><label class="task"><input type="checkbox"><span>Publicar videos, 3 clientes</span></label></div><div class="card day"><span class="trophy">🏆</span><h3>Fin de semana · Libre</h3><label class="task"><input type="checkbox"><span>Sábado libre</span></label><label class="task"><input type="checkbox"><span>Domingo libre</span></label></div></div></section>
+</div>
+
+<div id="overlay" class="overlay"></div>
+<div id="toast" class="toast">Semana completada 🏆</div>
+
+
+
+<script>
+"use strict";
+
+var currentWeek = 1;
+var celebrated = {1:false,2:false,3:false,4:false};
+
+function getCurrentSection(){
+  return document.querySelector('.week[data-week="' + currentWeek + '"]');
+}
+
+function getCurrentBoxes(){
+  var section = getCurrentSection();
+  if (!section) return [];
+  return Array.prototype.slice.call(section.querySelectorAll('input[type="checkbox"]'));
+}
+
+function updateDayTrophies(){
+  var section = getCurrentSection();
+  if (!section) return;
+
+  Array.prototype.slice.call(section.querySelectorAll(".day")).forEach(function(day){
+    var boxes = Array.prototype.slice.call(day.querySelectorAll('input[type="checkbox"]'));
+    var complete = boxes.length > 0 && boxes.every(function(box){ return box.checked; });
+    day.classList.toggle("done", complete);
+  });
+}
+
+function updateProgress(showCelebration){
+  var boxes = getCurrentBoxes();
+  var total = boxes.length;
+  var done = boxes.filter(function(box){ return box.checked; }).length;
+  var pct = total ? Math.round((done / total) * 100) : 0;
+
+  var bar = document.getElementById("bar");
+  var text = document.getElementById("progressText");
+
+  if (bar) bar.style.width = pct + "%";
+  if (text) text.textContent = done + "/" + total + " · " + pct + "%";
+
+  updateDayTrophies();
+
+  if (pct === 100 && showCelebration && !celebrated[currentWeek]) {
+    celebrated[currentWeek] = true;
+    celebrate();
+  }
+
+  if (pct < 100) {
+    celebrated[currentWeek] = false;
+  }
+}
+
+function celebrate(){
+  var overlay = document.getElementById("overlay");
+  var toast = document.getElementById("toast");
+  if (!overlay) return;
+
+  overlay.innerHTML = '<div class="big">🏆</div>';
+
+  var colors = ["#2563eb","#60a5fa","#93c5fd","#bfdbfe","#ffffff"];
+
+  for (var i = 0; i < 44; i++){
+    var c = document.createElement("div");
+    c.className = "conf";
+    c.style.left = (Math.random() * 100) + "%";
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDelay = (Math.random() * 0.25) + "s";
+    overlay.appendChild(c);
+  }
+
+  if (toast) toast.classList.add("show");
+
+  setTimeout(function(){
+    overlay.innerHTML = "";
+    if (toast) toast.classList.remove("show");
+  }, 1700);
+}
+
+function showWeek(weekNumber){
+  currentWeek = Number(weekNumber);
+
+  Array.prototype.slice.call(document.querySelectorAll(".tab")).forEach(function(btn){
+    btn.classList.toggle("active", Number(btn.getAttribute("data-week")) === currentWeek);
+  });
+
+  Array.prototype.slice.call(document.querySelectorAll(".week")).forEach(function(section){
+    section.classList.toggle("active", Number(section.getAttribute("data-week")) === currentWeek);
+  });
+
+  updateProgress(false);
+}
+
+function markCurrentWeek(){
+  var boxes = getCurrentBoxes();
+
+  boxes.forEach(function(box){
+    box.checked = true;
+  });
+
+  updateProgress(true);
+}
+
+function clearCurrentWeek(){
+  var boxes = getCurrentBoxes();
+
+  boxes.forEach(function(box){
+    box.checked = false;
+  });
+
+  celebrated[currentWeek] = false;
+  updateProgress(false);
+}
+
+document.addEventListener("change", function(event){
+  if (event.target && event.target.matches && event.target.matches('input[type="checkbox"]')) {
+    updateProgress(true);
+  }
+});
+
+window.showWeek = showWeek;
+window.markCurrentWeek = markCurrentWeek;
+window.clearCurrentWeek = clearCurrentWeek;
+
+showWeek(1);
+</script>
+
+
+<script>
+(function(){
+  "use strict";
+  var STORAGE_KEY = "joaquin_agencia_horario_v1";
+
+  function allBoxes(){
+    return Array.prototype.slice.call(document.querySelectorAll('.week input[type="checkbox"]'));
+  }
+
+  function saveState(){
+    try{
+      var state = allBoxes().map(function(box){ return !!box.checked; });
+      var payload = {checks:state, updated:new Date().toISOString()};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      updateSaveStatus(payload.updated);
+    }catch(e){}
+  }
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return;
+      var payload = JSON.parse(raw);
+      if(!payload || !Array.isArray(payload.checks)) return;
+      var boxes = allBoxes();
+      boxes.forEach(function(box,i){
+        if(i < payload.checks.length) box.checked = !!payload.checks[i];
+      });
+      updateSaveStatus(payload.updated);
+      if(typeof updateProgress === "function") updateProgress(false);
+    }catch(e){}
+  }
+
+  function updateSaveStatus(iso){
+    var el = document.getElementById("saveStatus");
+    if(!el) return;
+    if(!iso){
+      el.textContent = "Guardado automático activo";
+      return;
+    }
+    var d = new Date(iso);
+    var date = d.toLocaleDateString("es-EC");
+    var time = d.toLocaleTimeString("es-EC",{hour:"2-digit",minute:"2-digit"});
+    el.textContent = "Guardado automático · Último cambio: " + date + " " + time;
+  }
+
+  document.addEventListener("change", function(e){
+    if(e.target && e.target.matches('.week input[type="checkbox"]')){
+      setTimeout(saveState,0);
+    }
+  });
+
+  var mark = document.getElementById("markAll");
+  var clear = document.getElementById("clearAll");
+  if(mark) mark.addEventListener("click", function(){ setTimeout(saveState,20); });
+  if(clear) clear.addEventListener("click", function(){ setTimeout(saveState,20); });
+
+  var reset = document.getElementById("resetMonthBtn");
+  if(reset){
+    reset.addEventListener("click", function(){
+      allBoxes().forEach(function(box){
+        box.checked = false;
+      });
+
+      try{
+        localStorage.removeItem(STORAGE_KEY);
+      }catch(e){}
+
+      if(typeof celebrated !== "undefined"){
+        celebrated = {1:false,2:false,3:false,4:false};
+      }
+
+      if(typeof showWeek === "function"){
+        showWeek(1);
+      }else if(typeof updateProgress === "function"){
+        updateProgress(false);
+      }
+
+      var el = document.getElementById("saveStatus");
+      if(el){
+        el.textContent = "Mes reiniciado · Todo está en 0%";
+      }
+
+      saveState();
+    });
+  }
+
+  window.addEventListener("beforeunload", saveState);
+  setTimeout(loadState, 0);
+})();
+</script>
+
+
+<script>
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./service-worker.js").catch(function(){});
+  });
+}
+</script>
+
+</body>
+</html>
