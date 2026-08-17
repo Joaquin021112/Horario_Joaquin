@@ -1,4 +1,4 @@
-const CACHE = "agencia-joaquin-v1";
+const CACHE = "agencia-joaquin-v2-sync";
 const FILES = [
   "./",
   "./index.html",

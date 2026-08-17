@@ -218,8 +218,34 @@ body{
 <meta name="apple-mobile-web-app-title" content="Agencia J">
 <link rel="apple-touch-icon" href="icon-192.png">
 
+
+<style>
+.cloud-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.cloud-status{padding:9px 12px;border-radius:12px;background:rgba(11,31,68,.55);border:1px solid rgba(96,165,250,.28);color:#cfe1fb;font-size:13px}
+.cloud-logout{display:none;padding:9px 12px;border-radius:12px;background:transparent;border:1px solid rgba(96,165,250,.35);color:#fff;cursor:pointer}
+.login-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(3,10,24,.86);backdrop-filter:blur(8px)}
+.login-overlay.hidden{display:none}
+.login-card{width:min(420px,100%);padding:22px;border-radius:22px;background:linear-gradient(180deg,rgba(18,51,100,.99),rgba(8,29,61,.99));border:1px solid rgba(96,165,250,.32);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+.login-card h2{margin:0 0 6px}.login-card p{margin:0 0 16px;color:#b7c8e4;font-size:14px}
+.login-card input{width:100%;padding:12px 13px;margin:0 0 10px;border-radius:12px;border:1px solid rgba(96,165,250,.35);background:#071a38;color:#fff;outline:none}
+.login-card button{width:100%;padding:12px 14px;border:0;border-radius:12px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:white;font-weight:700;cursor:pointer}
+.login-error{min-height:18px;margin-top:10px;color:#ffc6c6;font-size:13px}
+</style>
+
 </head>
 <body>
+
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <h2>Entrar al horario</h2>
+    <p>Usa la misma cuenta en la computadora y en el celular para mantener los checks sincronizados.</p>
+    <input id="loginEmail" type="email" autocomplete="username" placeholder="Correo electrónico">
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Contraseña">
+    <button type="button" id="loginButton">Entrar</button>
+    <div id="loginError" class="login-error"></div>
+  </div>
+</div>
+
 <div class="wrap">
 <div class="card schedule">
     <h2>Horario diario</h2>
@@ -237,6 +263,10 @@ body{
   </div>
 
 
+  <div class="cloud-tools">
+    <div id="cloudStatus" class="cloud-status">Conectando sincronización...</div>
+    <button type="button" id="cloudLogout" class="cloud-logout">Cerrar sesión</button>
+  </div>
   <div class="save-tools">
     <div id="saveStatus" class="save-status">Guardado automático activo</div>
     <button type="button" id="resetMonthBtn" class="reset-week">↺ Reiniciar mes</button>
@@ -492,6 +522,166 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
     navigator.serviceWorker.register("./service-worker.js").catch(function(){});
   });
 }
+</script>
+
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC-pe3cP1s6Iu3y57HTxN1-W6FpGyrNV44",
+  authDomain: "horario-joaquin.firebaseapp.com",
+  projectId: "horario-joaquin",
+  storageBucket: "horario-joaquin.firebasestorage.app",
+  messagingSenderId: "908459542935",
+  appId: "1:908459542935:web:406b1c7a063369aaaf5cd2",
+  measurementId: "G-T78MK53S8X"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const overlay = document.getElementById("loginOverlay");
+const emailInput = document.getElementById("loginEmail");
+const passwordInput = document.getElementById("loginPassword");
+const loginButton = document.getElementById("loginButton");
+const loginError = document.getElementById("loginError");
+const cloudStatus = document.getElementById("cloudStatus");
+const logoutButton = document.getElementById("cloudLogout");
+
+let currentUser = null;
+let unsubscribeSnapshot = null;
+let applyingRemote = false;
+let saveTimer = null;
+
+function boxes(){ return Array.from(document.querySelectorAll('.week input[type="checkbox"]')); }
+function status(text){ if(cloudStatus) cloudStatus.textContent = text; }
+
+function refreshUI(){
+  try{
+    const active = document.querySelector(".week.active");
+    if(!active) return;
+    const bs = Array.from(active.querySelectorAll('input[type="checkbox"]'));
+    const done = bs.filter(b => b.checked).length;
+    const pct = bs.length ? Math.round(done / bs.length * 100) : 0;
+    const bar = document.getElementById("bar");
+    const txt = document.getElementById("progressText");
+    if(bar) bar.style.width = pct + "%";
+    if(txt) txt.textContent = done + "/" + bs.length + " · " + pct + "%";
+    active.querySelectorAll(".day").forEach(day => {
+      const ds = Array.from(day.querySelectorAll('input[type="checkbox"]'));
+      day.classList.toggle("done", ds.length > 0 && ds.every(b => b.checked));
+    });
+  }catch(e){}
+}
+
+function mirrorLocal(){
+  try{
+    localStorage.setItem("joaquin_agencia_horario_v1", JSON.stringify({
+      checks: boxes().map(b => !!b.checked),
+      updated: new Date().toISOString()
+    }));
+  }catch(e){}
+}
+
+async function saveCloud(){
+  if(!currentUser || applyingRemote) return;
+  status("Guardando...");
+  try{
+    await setDoc(doc(db, "usuarios", currentUser.uid, "horario", "progreso"), {
+      checks: boxes().map(b => !!b.checked),
+      updatedAt: serverTimestamp()
+    }, {merge:true});
+    mirrorLocal();
+    status("Sincronizado");
+  }catch(e){
+    console.error(e);
+    status("Error al sincronizar");
+  }
+}
+
+function queueSave(){
+  if(!currentUser || applyingRemote) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveCloud, 180);
+}
+
+function listenCloud(user){
+  if(unsubscribeSnapshot) unsubscribeSnapshot();
+  const ref = doc(db, "usuarios", user.uid, "horario", "progreso");
+  unsubscribeSnapshot = onSnapshot(ref, async snap => {
+    if(!snap.exists()){
+      await saveCloud();
+      return;
+    }
+    const data = snap.data();
+    if(!Array.isArray(data.checks)) return;
+    applyingRemote = true;
+    const bs = boxes();
+    bs.forEach((b,i) => { if(i < data.checks.length) b.checked = !!data.checks[i]; });
+    refreshUI();
+    mirrorLocal();
+    applyingRemote = false;
+    status("Sincronizado");
+  }, err => {
+    console.error(err);
+    status("Sin conexión con Firebase");
+  });
+}
+
+async function login(){
+  loginError.textContent = "";
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  if(!email || !password){
+    loginError.textContent = "Escribe el correo y la contraseña.";
+    return;
+  }
+  loginButton.disabled = true;
+  loginButton.textContent = "Entrando...";
+  try{
+    await signInWithEmailAndPassword(auth, email, password);
+  }catch(e){
+    console.error(e);
+    loginError.textContent = "Correo o contraseña incorrectos.";
+  }finally{
+    loginButton.disabled = false;
+    loginButton.textContent = "Entrar";
+  }
+}
+
+loginButton.addEventListener("click", login);
+passwordInput.addEventListener("keydown", e => { if(e.key === "Enter") login(); });
+logoutButton.addEventListener("click", () => signOut(auth));
+
+document.addEventListener("change", e => {
+  if(e.target && e.target.matches('.week input[type="checkbox"]')) queueSave();
+});
+
+["markAll","clearAll","resetMonthBtn"].forEach(id => {
+  const btn = document.getElementById(id);
+  if(btn) btn.addEventListener("click", () => setTimeout(queueSave, 100));
+});
+
+await setPersistence(auth, browserLocalPersistence);
+
+onAuthStateChanged(auth, user => {
+  currentUser = user || null;
+  if(user){
+    overlay.classList.add("hidden");
+    logoutButton.style.display = "inline-block";
+    status("Conectando...");
+    listenCloud(user);
+  }else{
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    overlay.classList.remove("hidden");
+    logoutButton.style.display = "none";
+    status("Inicia sesión para sincronizar");
+  }
+});
 </script>
 
 </body>
